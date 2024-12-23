@@ -5,12 +5,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+from admin import create_student_directory  # Importer la fonction de création de répertoire
 
-# Server details
+# Configuration du serveur
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 12345
 
-# Function to communicate with the server
+# Fonction pour communiquer avec le serveur
 def connect_to_server(command, data):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -23,7 +24,7 @@ def connect_to_server(command, data):
     finally:
         client_socket.close()
 
-# Login Page Class
+# Classe pour la page de connexion
 class LoginPage(QWidget):
     def __init__(self, switch_page_callback):
         super().__init__()
@@ -39,14 +40,14 @@ class LoginPage(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Login Name Field
+        # Champ pour le nom de connexion
         self.login_name_label = QLabel("Enter your login name:")
         self.login_name_input = QLineEdit()
         self.login_name_input.setPlaceholderText("Login Name")
         layout.addWidget(self.login_name_label)
         layout.addWidget(self.login_name_input)
 
-        # Password Field
+        # Champ pour le mot de passe
         self.password_label = QLabel("Enter your password:")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
@@ -54,7 +55,7 @@ class LoginPage(QWidget):
         layout.addWidget(self.password_label)
         layout.addWidget(self.password_input)
 
-        # Buttons
+        # Boutons
         button_layout = QHBoxLayout()
         self.login_button = QPushButton("Login")
         self.login_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
@@ -78,14 +79,19 @@ class LoginPage(QWidget):
             QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
+        # Envoie des données d'authentification au serveur
         response = connect_to_server("authenticate", f"{login_name},{password}")
 
         if "Authentication successful" in response:
             QMessageBox.information(self, "Success", response)
+
+            # Création du répertoire pour l'étudiant
+            directory_response = create_student_directory(login_name)
+            QMessageBox.information(self, "Directory Info", directory_response)
         else:
             QMessageBox.warning(self, "Error", response)
 
-# Signup Page Class
+# Classe pour la page d'inscription
 class SignupPage(QWidget):
     def __init__(self, switch_page_callback):
         super().__init__()
@@ -101,21 +107,21 @@ class SignupPage(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Student Name Field
+        # Champ pour le nom complet
         self.name_label = QLabel("Enter student name:")
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Full Name")
         layout.addWidget(self.name_label)
         layout.addWidget(self.name_input)
 
-        # Student ID Field
+        # Champ pour l'ID étudiant
         self.id_label = QLabel("Enter student ID:")
         self.id_input = QLineEdit()
         self.id_input.setPlaceholderText("Student ID")
         layout.addWidget(self.id_label)
         layout.addWidget(self.id_input)
 
-        # Buttons
+        # Boutons
         button_layout = QHBoxLayout()
         self.register_button = QPushButton("Register")
         self.register_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
@@ -139,14 +145,14 @@ class SignupPage(QWidget):
             QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
-        # Send registration data to the server
+        # Envoi des données d'inscription au serveur
         response = connect_to_server("register", f"{student_name},{student_id}")
 
         if "Registration successful" in response:
             login_name = response.split("Login Name: ")[1].split(",")[0]
             password = response.split("Password: ")[1]
 
-            # Copy credentials to the clipboard
+            # Copier les identifiants dans le presse-papiers
             clipboard = QApplication.clipboard()
             clipboard.setText(f"Login Name: {login_name}\nPassword: {password}")
 
@@ -158,7 +164,7 @@ class SignupPage(QWidget):
         else:
             QMessageBox.warning(self, "Error", response)
 
-# Main Application Class
+# Classe principale de l'application
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -168,18 +174,18 @@ class MainWindow(QWidget):
         self.setWindowTitle("Login and Signup Application")
         self.setGeometry(100, 100, 400, 300)
 
-        # Stack to hold multiple pages
+        # Pile pour contenir plusieurs pages
         self.pages = QStackedWidget()
 
-        # Create Login and Signup Pages
+        # Création des pages de connexion et d'inscription
         self.login_page = LoginPage(self.switch_page)
         self.signup_page = SignupPage(self.switch_page)
 
-        # Add pages to stack
+        # Ajout des pages à la pile
         self.pages.addWidget(self.login_page)
         self.pages.addWidget(self.signup_page)
 
-        # Layout for the main window
+        # Layout pour la fenêtre principale
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.pages)
         self.setLayout(main_layout)
