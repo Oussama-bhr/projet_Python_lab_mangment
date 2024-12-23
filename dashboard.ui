@@ -60,7 +60,6 @@
      </rect>
     </property>
     <property name="text">
-     <string>view_content</string>
     </property>
    </widget>
    <widget class="QPushButton" name="screen_view">
@@ -73,7 +72,6 @@
      </rect>
     </property>
     <property name="text">
-     <string>screen_view</string>
     </property>
    </widget>
    <widget class="QPushButton" name="action_block">
@@ -86,7 +84,6 @@
      </rect>
     </property>
     <property name="text">
-     <string>action_block</string>
     </property>
    </widget>
   </widget>
