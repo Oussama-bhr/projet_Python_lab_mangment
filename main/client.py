@@ -1,13 +1,16 @@
 import socket
+import ssl
 
-# Server information (same as the server setup)
-HOST = '127.0.0.1'  # Localhost
-PORT = 12345  # Port number the server is listening on
+HOST = '127.0.0.1' 
+PORT = 12345   
 
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
 
-# Function to connect to the server and send data
 def connect_to_server(data):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket = context.wrap_socket(client_socket, server_hostname="localhost")
 
     try:
         client_socket.connect((HOST, PORT))
@@ -22,7 +25,6 @@ def connect_to_server(data):
     finally:
         client_socket.close()
 
-
 # Register a new student
 def register():
     student_name = input("Enter student name: ")
@@ -30,20 +32,37 @@ def register():
     data = f"register,{student_name},{student_id}"
     connect_to_server(data)
 
-
 # Authenticate an existing student
 def authenticate():
-    login_name = input("Enter your login name: ")
-    password = input("Enter your password: ")
-    data = f"authenticate,{login_name},{password}"
-    response = connect_to_server(data)
+    attempts = 0  # Initialize attempts before the loop
+    while attempts < 3:
+        login_name = input("Enter your login name: ")
+        password = input("Enter your password: ")
+        data = f"authenticate,{login_name},{password}"
+        response = connect_to_server(data)
 
-    if "Authentication successful" in response:
-        print("Access granted. Proceeding with the application...")
-        # Add further client-side features here
-    else:
-        print("Authentication failed. Please try again.")
+        if response is None:
+            print("Server not responding. Please try again later.")
+            return
 
+        if "Authentication successful" in response:
+            # Extract role from the response and display the appropriate message
+            if "Role: instructor" in response:
+                print("Welcome Admin! You have full access.")
+            elif "Role: student" in response:
+                print("Welcome Student! You have limited access.")
+            return
+        elif "You have failed 3 times" in response:
+            print(response)  # Show the server message directly
+            return
+        else:
+            print("Authentication failed. Please try again.")
+            attempts += 1  # Increment attempts only after a failed attempt
+
+    if attempts == 3:
+        print("You have failed 3 times. Notifying the server.")
+        data = f"failed_attempt,{login_name}"  
+        connect_to_server(data)
 
 # Main function to manage client operations
 def main():
@@ -62,7 +81,6 @@ def main():
             break
         else:
             print("Invalid option. Please select again.")
-
 
 if __name__ == "__main__":
     main()
