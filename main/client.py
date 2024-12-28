@@ -34,7 +34,7 @@ def register():
 
 # Authenticate an existing student
 def authenticate():
-    attempts = 0  # Initialize attempts before the loop
+    attempts = 0
     while attempts < 3:
         login_name = input("Enter your login name: ")
         password = input("Enter your password: ")
@@ -46,12 +46,11 @@ def authenticate():
             return
 
         if "Authentication successful" in response:
-            # Extract role from the response and display the appropriate message
-            if "Role: instructor" in response:
-                print("Welcome Admin! You have full access.")
-            elif "Role: student" in response:
-                print("Welcome Student! You have limited access.")
-            return
+            print(response)
+            return  # Exit to main menu or proceed to post-login menu
+        elif "You have been blocked" in response:
+            print(response)  # Show the server message directly
+            return  # Exit to main menu
         elif "You have failed 3 times" in response:
             print(response)  # Show the server message directly
             return
@@ -63,6 +62,7 @@ def authenticate():
         print("You have failed 3 times. Notifying the server.")
         data = f"failed_attempt,{login_name}"  
         connect_to_server(data)
+
 
 # Main function to manage client operations
 def main():

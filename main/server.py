@@ -3,14 +3,51 @@ import socket
 import string
 import threading
 import sqlite3
-import bcrypt
+import bcrypt 
 from time import time
 import ssl
+import os
 
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 12345
 
 failed_attempts = {}
+STUDENT_DIR_ROOT = "students"
+connected_students = {}
+
+def create_student_directory(student_name):
+    """
+    Create a directory for a student if it doesn't exist.
+    """
+    directory_path = os.path.join(STUDENT_DIR_ROOT, student_name)
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+        print(f"Directory created for student: {directory_path}")
+    else:
+        print(f"Directory already exists for student: {directory_path}")
+    
+def get_user_role(login_name):
+    conn = sqlite3.connect("clients.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM clients WHERE login_name = ?", (login_name,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def add_connected_student(login_name, client_socket):
+    """
+    Add a student to the connected students list.
+    """
+    connected_students[login_name] = client_socket
+    print(f"{login_name} connected.")
+
+def remove_connected_student(login_name):
+    """
+    Remove a student from the connected students list.
+    """
+    if login_name in connected_students:
+        del connected_students[login_name]
+        print(f"{login_name} disconnected.")
 
 # Hash the password before saving
 def hash_password(password):
@@ -26,10 +63,15 @@ def save_to_db(student_name, student_id, login_name, password, role='student'):
     cursor = conn.cursor()
 
     try:
+        # Hash the password before saving
         hashed_password = hash_password(password)
         cursor.execute("INSERT INTO clients (student_name, student_id, login_name, password, role) VALUES (?, ?, ?, ?, ?)",
                        (student_name, student_id, login_name, hashed_password, role))
         conn.commit()
+        
+        # Create a directory for the student after successful registration
+        create_student_directory(student_name)
+
         print(f"Saved {login_name} to the database.")
         return f"Registration successful. Login Name: {login_name}, Password: {password}"
     except sqlite3.IntegrityError:
@@ -38,7 +80,10 @@ def save_to_db(student_name, student_id, login_name, password, role='student'):
         conn.close()
 
 # Authenticate an existing user
-def authenticate_user(login_name, provided_password, client_ip):
+def authenticate_user(login_name, provided_password, client_ip, client_socket):
+    if login_name in connected_students:
+        return "User is already logged in."
+    
     conn = sqlite3.connect("clients.db")
     cursor = conn.cursor()
 
@@ -62,7 +107,9 @@ def authenticate_user(login_name, provided_password, client_ip):
     stored_password, role = result
     if verify_password(stored_password, provided_password):
         failed_attempts[client_ip] = {'count': 0, 'timestamp': time()}
+        add_connected_student(login_name, client_socket)
         return f"Authentication successful. Role: {role}"
+
     else:
         failed_attempts[client_ip]['count'] += 1
         if failed_attempts[client_ip]['count'] >= 3:
@@ -90,14 +137,26 @@ def handle_client(client_socket, client_address):
 
                 elif command == "authenticate" and len(args) == 2:
                     login_name, password = args
-                    response = authenticate_user(login_name, password, client_address[0])
+                    response = authenticate_user(login_name, password, client_address[0], client_socket)
+
                     if "Authentication successful" in response:
                         _, role = response.split("Role: ")
                         role = role.strip()
                         if role == "instructor":
-                            response = "Welcome Admin! You have full access."
+                            response = "Authentication successful, Role: instructor. Welcome Admin! You have full access."
                         elif role == "student":
-                            response = "Welcome Student! You have limited access."
+                            response = "Authentication successful, Role: student. Welcome Student! You have limited access."
+                
+                elif command == "view_connected_students":
+                    if login_name in connected_students:  # Ensure user is logged in
+                        role = get_user_role(login_name)  # Fetch role from database
+                        if role == "instructor":  # Only instructors can view connected students
+                            response = "The following students are connected:\n" + "\n".join(connected_students.keys())
+                        else:
+                            response = "You are not authorized to view connected students."
+                    else:
+                        response = "Authentication required to view connected students."
+
 
                 else:
                     response = "Invalid command or arguments."
@@ -109,13 +168,20 @@ def handle_client(client_socket, client_address):
     except Exception as e:
         print(f"Error when handling client {client_address}: {e}")
     finally:
+        if login_name:
+            remove_connected_student(login_name)  # Remove the authenticated user
         client_socket.close()
         print(f"Connection with {client_address} closed.")
 
 # Start the server
 def start_server():
+
+    if not os.path.exists(STUDENT_DIR_ROOT):
+        os.makedirs(STUDENT_DIR_ROOT)
+        print(f"Created root directory for students: {STUDENT_DIR_ROOT}")
+
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile="server.crt", keyfile="server.key")
+    context.load_cert_chain(certfile="/home/mouhib/lab_managment/projet_Python_lab_mangment/main/server.crt", keyfile="/home/mouhib/lab_managment/projet_Python_lab_mangment/main/server.key")
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((SERVER_HOST, SERVER_PORT))

@@ -5,30 +5,43 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+import ssl
 
-# Server details
-SERVER_HOST = '127.0.0.1'
-SERVER_PORT = 12345
+from student import StudentPage
+from instructor import AdminPage
 
-# Function to communicate with the server
-def connect_to_server(command, data):
+# Backend Configuration
+HOST = '127.0.0.1'
+PORT = 12345
+
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
+
+def connect_to_server():
+    """
+    Function to create a persistent connection to the server.
+    """
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket = context.wrap_socket(client_socket, server_hostname="localhost")
+    
     try:
-        client_socket.connect((SERVER_HOST, SERVER_PORT))
-        client_socket.send(f"{command},{data}".encode())
-        response = client_socket.recv(1024).decode()
-        return response
+        client_socket.connect((HOST, PORT))
+        return client_socket
     except Exception as e:
-        return f"Error: {e}"
-    finally:
-        client_socket.close()
+        print(f"Error: {e}")
+        return None
+
 
 # Login Page Class
 class LoginPage(QWidget):
-    def __init__(self, switch_page_callback):
+    def __init__(self, switch_page_callback, switch_role_callback):
         super().__init__()
         self.switch_page_callback = switch_page_callback
+        self.switch_role_callback = switch_role_callback
+        self.client_socket = None  # Store the socket connection
         self.init_ui()
+
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -71,6 +84,9 @@ class LoginPage(QWidget):
         self.setLayout(layout)
 
     def authenticate(self):
+        """
+        Authenticate the user by sending credentials to the backend server.
+        """
         login_name = self.login_name_input.text()
         password = self.password_input.text()
 
@@ -78,12 +94,40 @@ class LoginPage(QWidget):
             QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
-        response = connect_to_server("authenticate", f"{login_name},{password}")
+        if self.client_socket is None:
+            self.client_socket = connect_to_server()  # Establish a persistent connection
 
+        if self.client_socket:
+            data = f"authenticate,{login_name},{password}"
+            self.send_data_to_server(data)  # Send authentication data
+        else:
+            QMessageBox.warning(self, "Error", "Unable to establish connection.")
+
+    def send_data_to_server(self, data):
+        """
+        Send data to the server over the persistent connection.
+        """
+        try:
+            self.client_socket.send(data.encode())
+            response = self.client_socket.recv(1024).decode()
+            self.handle_server_response(response)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Error communicating with server: {e}")
+
+    def handle_server_response(self, response):
+        """
+        Handle the server response after authentication or other operations.
+        """
         if "Authentication successful" in response:
-            QMessageBox.information(self, "Success", response)
+            if "Role: instructor" in response:
+                self.switch_role_callback("admin")
+            elif "Role: student" in response:
+                self.switch_role_callback("student")
+            else:
+                QMessageBox.warning(self, "Error", "Unknown role detected.")
         else:
             QMessageBox.warning(self, "Error", response)
+
 
 # Signup Page Class
 class SignupPage(QWidget):
@@ -132,6 +176,9 @@ class SignupPage(QWidget):
         self.setLayout(layout)
 
     def register(self):
+        """
+        Register a new user by sending the data to the backend server.
+        """
         student_name = self.name_input.text()
         student_id = self.id_input.text()
 
@@ -139,14 +186,29 @@ class SignupPage(QWidget):
             QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
-        # Send registration data to the server
-        response = connect_to_server("register", f"{student_name},{student_id}")
+        data = f"register,{student_name},{student_id}"
+        client_socket = connect_to_server()  # Establish the connection here
 
-        if "Registration successful" in response:
+        if client_socket:
+            try:
+                client_socket.send(data.encode())  # Send data to the server
+                response = client_socket.recv(1024).decode()  # Receive the server response
+                self.handle_server_response(response)  # Handle the server response
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Error communicating with server: {e}")
+            finally:
+                client_socket.close()  # Close the connection after communication
+        else:
+            QMessageBox.warning(self, "Error", "Unable to establish connection.")
+
+    def handle_server_response(self, response):
+        """
+        Handle the server response after registration.
+        """
+        if response and "Registration successful" in response:
             login_name = response.split("Login Name: ")[1].split(",")[0]
             password = response.split("Password: ")[1]
 
-            # Copy credentials to the clipboard
             clipboard = QApplication.clipboard()
             clipboard.setText(f"Login Name: {login_name}\nPassword: {password}")
 
@@ -158,10 +220,12 @@ class SignupPage(QWidget):
         else:
             QMessageBox.warning(self, "Error", response)
 
+
 # Main Application Class
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.client_socket = None  # Keep the socket in the main window
         self.init_ui()
 
     def init_ui(self):
@@ -171,13 +235,17 @@ class MainWindow(QWidget):
         # Stack to hold multiple pages
         self.pages = QStackedWidget()
 
-        # Create Login and Signup Pages
-        self.login_page = LoginPage(self.switch_page)
+        # Create pages
+        self.login_page = LoginPage(self.switch_page, self.switch_role)
         self.signup_page = SignupPage(self.switch_page)
+        self.admin_page = AdminPage(self.switch_page, self.logout, self.fetch_connected_students_callback)
+        self.student_page = StudentPage()
 
         # Add pages to stack
         self.pages.addWidget(self.login_page)
         self.pages.addWidget(self.signup_page)
+        self.pages.addWidget(self.admin_page)
+        self.pages.addWidget(self.student_page)
 
         # Layout for the main window
         main_layout = QVBoxLayout()
@@ -185,10 +253,46 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
     def switch_page(self, page_name):
+        """Switch between pages based on page name."""
         if page_name == "login":
             self.pages.setCurrentWidget(self.login_page)
         elif page_name == "signup":
             self.pages.setCurrentWidget(self.signup_page)
+        elif page_name == "admin":
+            self.pages.setCurrentWidget(self.admin_page)
+        elif page_name == "student":
+            self.pages.setCurrentWidget(self.student_page)
+
+    def switch_role(self, role):
+        if role == "admin":
+            self.pages.setCurrentWidget(self.admin_page)
+        elif role == "student":
+            self.pages.setCurrentWidget(self.student_page)
+
+    def fetch_connected_students_callback(self):
+        """
+        Fetch the list of connected students from the server.
+        """
+        if not self.client_socket:
+            self.client_socket = connect_to_server()
+
+        if self.client_socket:
+            try:
+                self.client_socket.sendall(b"view_connected_students,admin")
+                response = self.client_socket.recv(4096).decode()
+                return response.splitlines() if response else []
+            except Exception as e:
+                raise Exception(f"Error communicating with the server: {e}")
+        else:
+            raise Exception("No connection to the server.")
+
+    def logout(self):
+        if self.client_socket:
+           self.client_socket.close()  # Close the connection on logout
+           self.client_socket = None
+        self.login_page.login_name_input.clear()  
+        self.login_page.password_input.clear()  
+        self.switch_page("login")  # Redirect to login page
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
