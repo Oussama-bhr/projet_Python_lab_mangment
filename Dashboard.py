@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
-    QVBoxLayout,
     QMessageBox,
 )
 from PyQt5.QtCore import Qt
@@ -76,7 +75,7 @@ class Dashboard(QMainWindow):
 
     def load_directories(self):
         """
-        Dynamically load directories and create "View Content" buttons.
+        Dynamically load directories and create "View Content", "View Screen" and "Action Block" buttons.
         """
         base_path = "C:\\Users\\Bahri\\projet_Python_lab_mangment\\main\\students_directories"
 
@@ -110,9 +109,33 @@ class Dashboard(QMainWindow):
                     # View Content button
                     view_button = QPushButton("View Content")
                     view_button.setFont(QFont("Arial", 10))
+
+                    # Connect the button to the function
                     view_button.clicked.connect(
+                        lambda checked, dir_path=dir_path: self.open_directory_content(dir_path)
                     )
                     self.scroll_layout.addWidget(view_button)
+
+                    # View Screen button
+                    view_screen_button = QPushButton("View Screen")
+                    view_screen_button.setFont(QFont("Arial", 10))
+
+                    # Connect the button to a view screen function (you'll need to define this)
+                    view_screen_button.clicked.connect(
+                        lambda checked, dir_path=dir_path: self.view_screen(dir_path)
+                    )
+                    self.scroll_layout.addWidget(view_screen_button)
+
+                    # Action Block button
+                    action_block_button = QPushButton("Action Block")
+                    action_block_button.setFont(QFont("Arial", 10))
+
+                    # Connect the button to an action block function (you'll need to define this)
+                    action_block_button.clicked.connect(
+                        lambda checked, dir_path=dir_path: self.action_block(dir_path)
+                    )
+                    self.scroll_layout.addWidget(action_block_button)
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load directories: {e}")
 
@@ -122,6 +145,22 @@ class Dashboard(QMainWindow):
         """
         self.content_window = DirectoryContentWindow(directory_path)
         self.content_window.show()
+
+    def view_screen(self, directory_path):
+        """
+        Handle the 'View Screen' button action.
+        This is where you can display more information or provide a live view of the directory.
+        """
+        print(f"View Screen for: {directory_path}")
+        # You can add functionality here, like opening a new window or displaying additional information.
+
+    def action_block(self, directory_path):
+        """
+        Handle the 'Action Block' button action.
+        This is where you can trigger a block of actions related to the selected directory.
+        """
+        print(f"Action Block for: {directory_path}")
+        # You can add functionality here, like modifying files or triggering a process.
 
 
 if __name__ == "__main__":
