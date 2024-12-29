@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QMessageBox
 
 class AdminPage(QWidget):
-    def __init__(self, switch_page_callback, logout_callback, fetch_connected_students_callback):
+    def __init__(self, switch_page_callback, logout_callback):
         super().__init__()
         self.switch_page_callback = switch_page_callback
         self.logout_callback = logout_callback
