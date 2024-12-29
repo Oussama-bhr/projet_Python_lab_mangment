@@ -238,7 +238,7 @@ class MainWindow(QWidget):
         # Create pages
         self.login_page = LoginPage(self.switch_page, self.switch_role)
         self.signup_page = SignupPage(self.switch_page)
-        self.admin_page = AdminPage(self.switch_page, self.logout, self.fetch_connected_students_callback)
+        self.admin_page = AdminPage(self.switch_page, self.logout)
         self.student_page = StudentPage()
 
         # Add pages to stack
@@ -269,22 +269,6 @@ class MainWindow(QWidget):
         elif role == "student":
             self.pages.setCurrentWidget(self.student_page)
 
-    def fetch_connected_students_callback(self):
-        """
-        Fetch the list of connected students from the server.
-        """
-        if not self.client_socket:
-            self.client_socket = connect_to_server()
-
-        if self.client_socket:
-            try:
-                self.client_socket.sendall(b"view_connected_students,admin")
-                response = self.client_socket.recv(4096).decode()
-                return response.splitlines() if response else []
-            except Exception as e:
-                raise Exception(f"Error communicating with the server: {e}")
-        else:
-            raise Exception("No connection to the server.")
 
     def logout(self):
         if self.client_socket:
