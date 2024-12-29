@@ -13,7 +13,6 @@ SERVER_PORT = 12345
 
 failed_attempts = {}
 STUDENT_DIR_ROOT = "students"
-connected_students = {}
 
 def create_student_directory(student_name):
     """
@@ -33,21 +32,6 @@ def get_user_role(login_name):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
-
-def add_connected_student(login_name, client_socket):
-    """
-    Add a student to the connected students list.
-    """
-    connected_students[login_name] = client_socket
-    print(f"{login_name} connected.")
-
-def remove_connected_student(login_name):
-    """
-    Remove a student from the connected students list.
-    """
-    if login_name in connected_students:
-        del connected_students[login_name]
-        print(f"{login_name} disconnected.")
 
 # Hash the password before saving
 def hash_password(password):
@@ -81,8 +65,7 @@ def save_to_db(student_name, student_id, login_name, password, role='student'):
 
 # Authenticate an existing user
 def authenticate_user(login_name, provided_password, client_ip, client_socket):
-    if login_name in connected_students:
-        return "User is already logged in."
+   
     
     conn = sqlite3.connect("clients.db")
     cursor = conn.cursor()
@@ -107,7 +90,6 @@ def authenticate_user(login_name, provided_password, client_ip, client_socket):
     stored_password, role = result
     if verify_password(stored_password, provided_password):
         failed_attempts[client_ip] = {'count': 0, 'timestamp': time()}
-        add_connected_student(login_name, client_socket)
         return f"Authentication successful. Role: {role}"
 
     else:
@@ -146,16 +128,6 @@ def handle_client(client_socket, client_address):
                             response = "Authentication successful, Role: instructor. Welcome Admin! You have full access."
                         elif role == "student":
                             response = "Authentication successful, Role: student. Welcome Student! You have limited access."
-                
-                elif command == "view_connected_students":
-                    if login_name in connected_students:  # Ensure user is logged in
-                        role = get_user_role(login_name)  # Fetch role from database
-                        if role == "instructor":  # Only instructors can view connected students
-                            response = "The following students are connected:\n" + "\n".join(connected_students.keys())
-                        else:
-                            response = "You are not authorized to view connected students."
-                    else:
-                        response = "Authentication required to view connected students."
 
 
                 else:
@@ -168,8 +140,6 @@ def handle_client(client_socket, client_address):
     except Exception as e:
         print(f"Error when handling client {client_address}: {e}")
     finally:
-        if login_name:
-            remove_connected_student(login_name)  # Remove the authenticated user
         client_socket.close()
         print(f"Connection with {client_address} closed.")
 
