@@ -8,17 +8,17 @@ from time import time
 import ssl
 import os
 
-SERVER_HOST = '127.0.0.1'
+SERVER_HOST = '192.168.1.101'
 SERVER_PORT = 12345
 
 failed_attempts = {}
 STUDENT_DIR_ROOT = "students"
 
-def create_student_directory(student_name):
+def create_student_directory(login_name):
     """
     Create a directory for a student if it doesn't exist.
     """
-    directory_path = os.path.join(STUDENT_DIR_ROOT, student_name)
+    directory_path = os.path.join(STUDENT_DIR_ROOT, login_name)
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
         print(f"Directory created for student: {directory_path}")
@@ -54,7 +54,7 @@ def save_to_db(student_name, student_id, login_name, password, role='student'):
         conn.commit()
         
         # Create a directory for the student after successful registration
-        create_student_directory(student_name)
+        create_student_directory(login_name)
 
         print(f"Saved {login_name} to the database.")
         return f"Registration successful. Login Name: {login_name}, Password: {password}"
