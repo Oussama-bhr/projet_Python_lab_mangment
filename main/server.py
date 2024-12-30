@@ -8,8 +8,13 @@ from time import time
 import ssl
 import os
 
+
 SERVER_HOST = '192.168.1.101'
 SERVER_PORT = 12345
+
+base_dir = os.path.dirname(os.path.abspath(__file__))
+cert_path = os.path.join(base_dir, 'certs', 'server.crt')
+key_path = os.path.join(base_dir, 'certs', 'server.key')
 
 failed_attempts = {}
 STUDENT_DIR_ROOT = "students"
@@ -151,7 +156,7 @@ def start_server():
         print(f"Created root directory for students: {STUDENT_DIR_ROOT}")
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile="/home/mouhib/lab_managment/projet_Python_lab_mangment/main/server.crt", keyfile="/home/mouhib/lab_managment/projet_Python_lab_mangment/main/server.key")
+    context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((SERVER_HOST, SERVER_PORT))
