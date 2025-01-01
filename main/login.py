@@ -11,7 +11,7 @@ from student import StudentPage
 from instructor import AdminPage
 
 # Backend Configuration
-HOST = '192.168.1.101'
+HOST = '192.168.111.1'
 PORT = 12345
 
 context = ssl.create_default_context()

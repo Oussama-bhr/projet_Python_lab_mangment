@@ -9,7 +9,7 @@ import ssl
 import os
 
 
-SERVER_HOST = '192.168.1.101'
+SERVER_HOST = '192.168.111.1'
 SERVER_PORT = 12345
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
