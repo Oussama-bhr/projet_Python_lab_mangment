@@ -127,10 +127,7 @@ class ServerAdminApp(QWidget):
         layout.addWidget(list_users_button)
 
         
-        title_label = QLabel("Admin Control Panel")
-        title_label.setFont(QFont("Arial", 16))
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
+       
 
         self.admin_panel.setLayout(layout)
         self.admin_panel.show()
