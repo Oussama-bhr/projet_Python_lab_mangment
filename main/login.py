@@ -6,9 +6,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 import ssl
-
 from student import StudentPage
-from instructor import AdminPage
+
 
 # Backend Configuration
 HOST = '192.168.111.1'
@@ -35,13 +34,12 @@ def connect_to_server():
 
 # Login Page Class
 class LoginPage(QWidget):
-    def __init__(self, switch_page_callback, switch_role_callback):
+    def __init__(self, switch_page_callback):
         super().__init__()
         self.switch_page_callback = switch_page_callback
-        self.switch_role_callback = switch_role_callback
+        
         self.client_socket = None  # Store the socket connection
         self.init_ui()
-
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -99,6 +97,7 @@ class LoginPage(QWidget):
 
         if self.client_socket:
             data = f"authenticate,{login_name},{password}"
+            print(f"Sending data to server: {data}") 
             self.send_data_to_server(data)  # Send authentication data
         else:
             QMessageBox.warning(self, "Error", "Unable to establish connection.")
@@ -114,19 +113,16 @@ class LoginPage(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Error communicating with server: {e}")
 
+
     def handle_server_response(self, response):
         """
         Handle the server response after authentication or other operations.
         """
         if "Authentication successful" in response:
-            if "Role: instructor" in response:
-                self.switch_role_callback("admin")
-            elif "Role: student" in response:
-                self.switch_role_callback("student")
-            else:
-                QMessageBox.warning(self, "Error", "Unknown role detected.")
+            self.switch_page_callback("student")  # Switch to the student page
         else:
-            QMessageBox.warning(self, "Error", response)
+            QMessageBox.warning(self, "Error", response)  # Show the error message from the server
+
 
 
 # Signup Page Class
@@ -236,15 +232,13 @@ class MainWindow(QWidget):
         self.pages = QStackedWidget()
 
         # Create pages
-        self.login_page = LoginPage(self.switch_page, self.switch_role)
+        self.login_page = LoginPage(self.switch_page)
         self.signup_page = SignupPage(self.switch_page)
-        self.admin_page = AdminPage(self.switch_page, self.logout)
         self.student_page = StudentPage()
 
-        # Add pages to stack
+        # Add pages to stack (no admin page)
         self.pages.addWidget(self.login_page)
         self.pages.addWidget(self.signup_page)
-        self.pages.addWidget(self.admin_page)
         self.pages.addWidget(self.student_page)
 
         # Layout for the main window
@@ -258,25 +252,9 @@ class MainWindow(QWidget):
             self.pages.setCurrentWidget(self.login_page)
         elif page_name == "signup":
             self.pages.setCurrentWidget(self.signup_page)
-        elif page_name == "admin":
-            self.pages.setCurrentWidget(self.admin_page)
         elif page_name == "student":
             self.pages.setCurrentWidget(self.student_page)
 
-    def switch_role(self, role):
-        if role == "admin":
-            self.pages.setCurrentWidget(self.admin_page)
-        elif role == "student":
-            self.pages.setCurrentWidget(self.student_page)
-
-
-    def logout(self):
-        if self.client_socket:
-           self.client_socket.close()  # Close the connection on logout
-           self.client_socket = None
-        self.login_page.login_name_input.clear()  
-        self.login_page.password_input.clear()  
-        self.switch_page("login")  # Redirect to login page
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
