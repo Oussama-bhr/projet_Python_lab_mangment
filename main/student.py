@@ -96,6 +96,12 @@ class StudentPage(QWidget):
         refresh_button.clicked.connect(self.refresh_view)
         button_layout.addWidget(refresh_button)
 
+        # Logout button
+        logout_button = QPushButton("Logout")
+        logout_button.clicked.connect(self.logout)
+        logout_button.setStyleSheet("background-color: red; color: white;")  # Style the logout button
+        button_layout.addWidget(logout_button)
+
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
@@ -174,6 +180,16 @@ class StudentPage(QWidget):
         """
         self.file_tree.setRootIndex(self.file_model.index(self.personal_folder_path))
         QMessageBox.information(self, "Refreshed", "File explorer refreshed.")
+
+    def logout(self):
+        """
+        Logout the user by closing the application.
+        """
+        reply = QMessageBox.question(self, "Logout", "Are you sure you want to logout?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.close()  # Close the current window
+            QApplication.quit()  # Quit the application
 
 
 # Main application
