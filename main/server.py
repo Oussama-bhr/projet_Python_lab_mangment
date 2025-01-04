@@ -84,23 +84,58 @@ def handle_client(client_socket, client_address):
     print(f"Connection from {client_address} established.")
     try:
         while True:
-            data = client_socket.recv(1024).decode()
+            # Receive data from the client
+            data = client_socket.recv(1024)
             if not data:
+                print(f"Debug: No data received from {client_address}. Closing connection.")
                 break
 
-            command, *args = data.strip().split(',')
+            try:
+                decoded_data = data.decode()  # Decode data from bytes to string
+                print(f"Debug: Received data from {client_address}: {decoded_data}")
+            except UnicodeDecodeError as e:
+                print(f"Debug: Failed to decode data from {client_address}: {data}. Error: {e}")
+                client_socket.send(b"Invalid data encoding.")
+                continue
+
+            # Split command and arguments
+            command, *args = decoded_data.strip().split(',')
+            print(f"Debug: Parsed command: {command}, arguments: {args}")
 
             if command == "authenticate" and len(args) == 2:
                 login_name, password = args
+                print(f"Debug: Authenticating user {login_name} from {client_address[0]}")
                 response = authenticate_user(login_name, password, client_address[0])
             elif command == "register" and len(args) == 2:
                 student_name, student_id = args
                 login_name = f"{student_name}@{student_id}"
                 password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+                print(f"Debug: Registering user {student_name} with ID {student_id}. Generated login: {login_name}")
                 response = save_to_db(student_name, student_id, login_name, password)
+            elif command == "send_file" and len(args) == 1:
+                file_name = args[0]
+                print(f"Debug: Preparing to receive file {file_name} from {client_address[0]}.")
+
+                # Receive the file size
+                file_size_data = client_socket.recv(1024).decode()
+                print(f"Debug: Received file size data: {file_size_data}")
+                try:
+                    file_size = int(file_size_data)
+                    print(f"Debug: Parsed file size: {file_size}")
+                except ValueError:
+                    print(f"Debug: Invalid file size received: {file_size_data}")
+                    response = "Invalid file size."
+                    client_socket.send(response.encode())
+                    continue
+
+                # Receive the file
+                response = receive_file(client_socket, file_name, file_size, client_address[0])
             else:
+                print(f"Debug: Invalid command or arguments received: {decoded_data}")
                 response = "Invalid command or arguments."
 
+            # Send response back to the client
+            print(f"Debug: Sending response to {client_address}: {response}")
             client_socket.send(response.encode())
 
     except Exception as e:
@@ -108,6 +143,41 @@ def handle_client(client_socket, client_address):
     finally:
         client_socket.close()
         print(f"Connection with {client_address} closed.")
+
+def receive_file(client_socket, file_name, file_size, client_ip):
+    """Receive a file from the client and save it to the student's directory."""
+    try:
+        print(f"Debug: Start receiving file {file_name} from {client_ip}. Expected size: {file_size} bytes.")
+
+        # Extract the base file name and construct the path
+        file_path = os.path.join("received_files", os.path.basename(file_name))
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        if os.path.exists(file_path):
+            print(f"Debug: File {file_name} exists at {file_path}. Size: {os.path.getsize(file_path)} bytes.")
+
+        received_size = 0
+        with open(file_path, 'wb') as file:
+            while received_size < file_size:
+                file_data = client_socket.recv(min(4096, file_size - received_size))
+                if not file_data:
+                    print("Debug: No more data received from client. Breaking out of loop.")
+                    break  # No more data
+                file.write(file_data)
+                received_size += len(file_data)
+                print(f"Debug: Received {len(file_data)} bytes. Total received: {received_size}/{file_size}")
+
+        if received_size == file_size:
+            print(f"Debug: File {file_name} received successfully. Total size: {received_size} bytes.")
+            return f"File {file_name} received and saved successfully."
+        else:
+            print(f"Debug: File {file_name} not fully received. Received size: {received_size}/{file_size}")
+            return f"Error: Incomplete file received. Received size: {received_size}/{file_size} bytes."
+
+    except Exception as e:
+        print(f"Error receiving file {file_name}: {e}")
+        return f"Error receiving file: {e}"
+
 
 
 def start_server():

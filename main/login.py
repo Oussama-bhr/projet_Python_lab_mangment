@@ -17,27 +17,31 @@ context = ssl.create_default_context()
 context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
+
 def connect_to_server():
     """
     Function to create a persistent connection to the server.
     """
+    global client_socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket = context.wrap_socket(client_socket, server_hostname="localhost")
     
     try:
         client_socket.connect((HOST, PORT))
+        student_page = StudentPage(client_socket)
         return client_socket
     except Exception as e:
         print(f"Error: {e}")
         return None
 
 
+
+    
 # Login Page Class
 class LoginPage(QWidget):
     def __init__(self, switch_page_callback):
         super().__init__()
         self.switch_page_callback = switch_page_callback
-        
         self.client_socket = None  # Store the socket connection
         self.init_ui()
 
@@ -119,6 +123,7 @@ class LoginPage(QWidget):
         Handle the server response after authentication or other operations.
         """
         if "Authentication successful" in response:
+            # After successful login, create a new socket for file transfers
             self.switch_page_callback("student")  # Switch to the student page
         else:
             QMessageBox.warning(self, "Error", response)  # Show the error message from the server
@@ -221,7 +226,7 @@ class SignupPage(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.client_socket = None  # Keep the socket in the main window
+        self.client_socket = connect_to_server()   # Keep the socket in the main window
         self.init_ui()
 
     def init_ui(self):
@@ -234,7 +239,7 @@ class MainWindow(QWidget):
         # Create pages
         self.login_page = LoginPage(self.switch_page)
         self.signup_page = SignupPage(self.switch_page)
-        self.student_page = StudentPage()
+        self.student_page = StudentPage(self.client_socket)
 
         # Add pages to stack (no admin page)
         self.pages.addWidget(self.login_page)
