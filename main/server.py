@@ -8,6 +8,9 @@ import bcrypt
 import random
 import string
 import os
+import cv2
+import numpy as np
+import struct
 from server_ui import ServerAdminApp
 
 SERVER_HOST = '192.168.1.101'
@@ -112,6 +115,26 @@ def handle_client(client_socket, client_address):
                 password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
                 print(f"Debug: Registering user {student_name} with ID {student_id}. Generated login: {login_name}")
                 response = save_to_db(student_name, student_id, login_name, password)
+            elif command == "screenshot":
+                # Receive image size (encoded as 4 bytes)
+                image_size_data = receive_all(client_socket, 4)
+                image_size = struct.unpack(">L", image_size_data)[0]
+
+                # Receive image data
+                image_data = receive_all(client_socket, image_size)
+
+                # Decode image
+                image = np.frombuffer(image_data, dtype=np.uint8)
+                image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+
+                # Display screenshot (optional)
+                cv2.imshow("Received Screenshot", image)
+                cv2.waitKey(0) 
+                cv2.destroyAllWindows() 
+
+                # Send confirmation to client
+                client_socket.send(b"Screenshot received successfully.")
+
             elif command == "send_file" and len(args) == 1:
                 file_name = args[0]
                 print(f"Debug: Preparing to receive file {file_name} from {client_address[0]}.")
@@ -177,8 +200,78 @@ def receive_file(client_socket, file_name, file_size, client_ip):
     except Exception as e:
         print(f"Error receiving file {file_name}: {e}")
         return f"Error receiving file: {e}"
+    
+def screenshot(client_socket):
+    try:
+        print("[DEBUG] Starting screenshot handling loop.")
 
+        while True:
+            print("[DEBUG] Sending 'screenshot' command to the client.")
+            client_socket.send(b"screenshot")
 
+            # Receive image size
+            print("[DEBUG] Waiting to receive image size from client.")
+            image_size_data = receive_all(client_socket, 4)
+            if not image_size_data:
+                print("[WARNING] No data received for image size. Breaking loop.")
+                break
+
+            image_size = struct.unpack(">L", image_size_data)[0]
+            print(f"[DEBUG] Image size received: {image_size} bytes.")
+
+            # Receive image data
+            print("[DEBUG] Waiting to receive image data from client.")
+            image_data = receive_all(client_socket, image_size)
+            if not image_data:
+                print("[WARNING] No image data received. Breaking loop.")
+                break
+
+            print(f"[DEBUG] Image data of {len(image_data)} bytes received.")
+
+            # Decode image
+            try:
+                print("[DEBUG] Decoding image data.")
+                image = np.frombuffer(image_data, dtype=np.uint8)
+                image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+
+                if image is None:
+                    print("[ERROR] Failed to decode image. Skipping display.")
+                    continue
+
+                print("[INFO] Image successfully decoded.")
+            except Exception as decode_error:
+                print(f"[ERROR] Error decoding image: {decode_error}")
+                continue
+
+            # Display screenshot
+            cv2.startWindowThread()
+            print("[DEBUG] Displaying the received screenshot (optional).")
+            cv2.imshow("Received Screenshot", image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+            # Send confirmation to client
+            print("[DEBUG] Sending confirmation to client.")
+            client_socket.send(b"Screenshot received successfully.")
+
+    except Exception as e:
+        print(f"[ERROR] Error in screenshot function: {e}")
+
+def receive_all(sock, count):
+    """
+    Receive exactly 'count' bytes from the socket.
+    """
+    buf = b''
+    while count:
+        print(f"[DEBUG] Attempting to receive {count} bytes.")
+        newbuf = sock.recv(count)
+        if not newbuf:
+            print("[WARNING] No data received during 'receive_all'. Returning None.")
+            return None
+        buf += newbuf
+        count -= len(newbuf)
+        print(f"[DEBUG] Received {len(newbuf)} bytes, {count} bytes remaining.")
+    return buf
 
 def start_server():
     """Start the SSL server."""

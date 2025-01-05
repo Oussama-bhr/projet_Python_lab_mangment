@@ -7,6 +7,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 import socket
+import cv2
+import pyautogui
+import numpy as np
+import struct
 
 class CheckableFileSystemModel(QFileSystemModel):
     """
@@ -44,6 +48,18 @@ class StudentPage(QWidget):
         self.personal_folder_path = os.path.join(os.path.expanduser("~"), "MyPersonalSpace")
         self.create_personal_folder()
         self.init_ui()
+
+    # Capture and send one screenshot
+    def take_screenshot(client_socket):
+        try:
+            screen = pyautogui.screenshot()
+            frame = np.array(screen)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            message = struct.pack(">L", len(buffer)) + buffer.tobytes()
+            client_socket.sendall(message)
+        except Exception as e:
+            print("An error occurred:", e)
 
     def create_personal_folder(self):
         """

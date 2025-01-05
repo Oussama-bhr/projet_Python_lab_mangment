@@ -7,7 +7,10 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 import ssl
 from student import StudentPage
+import threading
+import os
 
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # Backend Configuration
 HOST = '192.168.1.101'
@@ -222,12 +225,17 @@ class SignupPage(QWidget):
             QMessageBox.warning(self, "Error", response)
 
 
-# Main Application Class
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.client_socket = connect_to_server()   # Keep the socket in the main window
+        self.client_socket = connect_to_server()  # Keep the socket in the main window
         self.init_ui()
+
+        # Start a thread to listen for server commands
+        if self.client_socket:
+            self.listener_thread = threading.Thread(target=self.listen_for_commands, daemon=True)
+            self.listener_thread.start()
 
     def init_ui(self):
         self.setWindowTitle("Login and Signup Application")
@@ -259,6 +267,27 @@ class MainWindow(QWidget):
             self.pages.setCurrentWidget(self.signup_page)
         elif page_name == "student":
             self.pages.setCurrentWidget(self.student_page)
+
+    def listen_for_commands(self):
+        """
+        Continuously listen for commands from the server and handle them.
+        """
+        try:
+            while True:
+                if self.client_socket:
+                    command = self.client_socket.recv(1024).decode()
+                    print(f"Command received: {command}")
+
+                    if command == "screenshot":
+                        # Trigger the screenshot function
+                        self.student_page.take_screenshot(self.client_socket)
+                    elif command == "":
+                        # Handle empty command (server might send an empty message)
+                        continue
+                    else:
+                        print(f"Unknown command: {command}")
+        except Exception as e:
+            print(f"Error in listener thread: {e}")
 
 
 if __name__ == "__main__":
