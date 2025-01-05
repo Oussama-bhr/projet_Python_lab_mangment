@@ -6,7 +6,11 @@ from PyQt5.QtWidgets import (
     QPushButton, QHBoxLayout, QMessageBox, QFileDialog, QAbstractItemView
 )
 from PyQt5.QtCore import Qt
-
+import socket
+import cv2
+import pyautogui
+import numpy as np
+import struct
 
 class CheckableFileSystemModel(QFileSystemModel):
     """
@@ -38,11 +42,24 @@ class CheckableFileSystemModel(QFileSystemModel):
 
 
 class StudentPage(QWidget):
-    def __init__(self):
+    def __init__(self, client_socket):
         super().__init__()
+        self.client_socket = client_socket
         self.personal_folder_path = os.path.join(os.path.expanduser("~"), "MyPersonalSpace")
         self.create_personal_folder()
         self.init_ui()
+
+    # Capture and send one screenshot
+    def take_screenshot(client_socket):
+        try:
+            screen = pyautogui.screenshot()
+            frame = np.array(screen)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            message = struct.pack(">L", len(buffer)) + buffer.tobytes()
+            client_socket.sendall(message)
+        except Exception as e:
+            print("An error occurred:", e)
 
     def create_personal_folder(self):
         """
@@ -164,15 +181,77 @@ class StudentPage(QWidget):
         else:
             QMessageBox.warning(self, "No Selection", "No files or folders selected.")
 
+
     def send_selected(self):
-        """
-        Simulate sending the selected files or folders.
-        """
         checked_items = self.get_checked_items()
         if checked_items:
-            QMessageBox.information(self, "Send", f"Selected items sent successfully:\n\n{', '.join(checked_items)}")
+            if hasattr(self, 'client_socket') and self.client_socket:
+                try:
+                    for item_path in checked_items:
+                        if os.path.isfile(item_path):
+                            file_name = item_path  # Use the full path of the file
+                            # Send the command to the server (send file command)
+                            command = "send_file"
+                            message = f"{command},{file_name}"
+                            self.client_socket.send(message.encode())  # Send file name as a string
+                            print(f"Debug: Sent command to server: {message}")
+
+                            # Send the file content as binary
+                            with open(item_path, 'rb') as file:
+                                total_sent = 0
+                                file_size = os.path.getsize(item_path) 
+                                # Send file size as a separate message
+                                self.client_socket.send(str(file_size).encode()) 
+                                while chunk := file.read(1096):
+                                    self.client_socket.send(chunk)  # Send binary file data
+                                    total_sent += len(chunk)
+                                    
+
+                            print(f"Debug: File {file_name} sent successfully.")
+
+                            # Optionally, wait for the server to acknowledge the file
+                            response = self.client_socket.recv(1024)  # Read server response as raw bytes
+                            print(f"Debug: Server response received.")
+
+                            # Process server response, ensure it's a text message
+                            try:
+                                decoded_response = response.decode('utf-8')
+                                print(f"Decoded response: {decoded_response}")
+                                self.handle_server_response(decoded_response)  # Process response as needed
+                            except UnicodeDecodeError:
+                                print("Received non-textual data from server.")
+
+                        # Provide a success message
+                        QMessageBox.information(self, "Success", "Files sent successfully.")
+                except socket.error as e:
+                        print(f"Socket error: {e}")
+                        QMessageBox.warning(self, "Socket Error", f"Error sending files: {e}")
+                except OSError as e:
+                        print(f"OS error: {e}")
+                        QMessageBox.warning(self, "File Error", f"Error sending files: {e}")
+                except Exception as e:
+                        print(f"Error sending files: {e}")
+                        QMessageBox.warning(self, "Error", f"Error sending files: {e}")
+                else:
+                    QMessageBox.warning(self, "Error", "Socket connection not established.")
+            else:
+                QMessageBox.warning(self, "Error", "No items selected.")
+
+    def handle_server_response(self, response):
+        """
+        This method handles the response from the server after a file is sent.
+        It can process success or error messages or any other data the server sends back.
+        """
+        print(f"Server response: {response}")
+
+        if "Error" in response:
+            # If the server response contains an error message, show it to the user
+            QMessageBox.warning(self, "Error", f"Error: {response}")
         else:
-            QMessageBox.warning(self, "No Selection", "No files or folders selected.")
+            # If it's a success message or other information, display it
+            QMessageBox.information(self, "Success", f"Server response: {response}")
+
+
 
     def refresh_view(self):
         """

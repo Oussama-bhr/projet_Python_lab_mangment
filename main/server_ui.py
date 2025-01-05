@@ -191,7 +191,11 @@ class ServerAdminApp(QWidget):
         self.action_window.show()
 
     def take_screenshot(self):
-        """Placeholder function to take a screenshot from the user's PC."""
+        try:
+            from server import screenshot
+            screenshot()
+        except Exception as e:
+            print(f"Server Error: {e}")
         QMessageBox.information(self, "Screenshot", f"Taking a screenshot from {self.selected_user}'s PC.")
         # Actual screenshot logic would go here, potentially involving remote desktop or system interaction.
 

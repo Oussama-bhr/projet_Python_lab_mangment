@@ -1,0 +1,30 @@
+import nmap
+
+# Initialiser le scanner Nmap
+nm = nmap.PortScanner()
+
+# Spécifier l'adresse IP ou le réseau cible
+target = '192.168.1.0/28'  # Par exemple, pour scanner tout le réseau local
+
+# Exécuter l'analyse
+nm.scan(target, '1-1024', '-sV -Pn')  # Scanne les ports de 1 à 1024 et détecte les versions des services
+
+# Parcourir les hôtes scannés
+for host in nm.all_hosts():
+    print(f"\nHost: {host} ({nm[host].hostname()})")
+    print(f"State: {nm[host].state()}")
+    
+    # Parcourir les protocoles (tcp/udp)
+    for proto in nm[host].all_protocols():
+        print(f"Protocol: {proto}")
+        
+        lport = nm[host][proto].keys()
+        for port in sorted(lport):
+            print(f"Port: {port}\tState: {nm[host][proto][port]['state']}\tService: {nm[host][proto][port]['name']}")
+
+            # Vérifier si le service est potentiellement vulnérable (exemple simple)
+            if nm[host][proto][port]['name'] == 'http' and port == 80:
+                print("Attention: HTTP ouvert sur le port 80 (non sécurisé)")
+
+# Afficher un résumé des vulnérabilités potentielles
+print("\nAnalyse terminée. Vérifiez les ports ouverts et les services non sécurisés.\n\n")
