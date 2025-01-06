@@ -10,6 +10,9 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal
 import threading
 
+
+# Rest of your server_ui code...
+
 current_os = platform.system()
 if current_os == "Linux":
     os.environ["QT_QPA_PLATFORM"] = "xcb"
@@ -133,12 +136,37 @@ class ServerAdminApp(QWidget):
         list_users_button.clicked.connect(self.list_all_users)
         layout.addWidget(list_users_button)
 
-        
+        # New button to list all users
+        list_users_button = QPushButton("See Connected Students")
+        list_users_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
+        list_users_button.clicked.connect(self.connected_students)
+        layout.addWidget(list_users_button)
        
 
         self.admin_panel.setLayout(layout)
         self.admin_panel.show()
 
+    def connected_students(self):
+        """Display the list of connected students and their IP addresses."""
+        try:
+            from server import client_to_login  # Import the client_to_login dictionary
+
+            if not client_to_login:
+                QMessageBox.information(self, "Connected Students", "No students are currently connected.")
+                return
+
+            # Format the connected students and their IP addresses
+            connected_students_info = "\n".join(
+                [f"Student: {login_name}, IP: {ip[0]}" for ip, login_name in client_to_login.items()]
+            )
+
+            # Display the information in a QMessageBox
+            QMessageBox.information(self, "Connected Students", f"Connected Students:\n{connected_students_info}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to fetch connected students: {e}")
+
+    
+    
     def list_all_users(self):
         """List all users from the database."""
         try:
@@ -179,33 +207,145 @@ class ServerAdminApp(QWidget):
 
         layout = QVBoxLayout()
         
+        take_screenshot_button = QPushButton("Delete user")
+        take_screenshot_button.clicked.connect(self.delete_user)
+        layout.addWidget(take_screenshot_button)
+
+        self.action_window.setLayout(layout)
+        self.action_window.show()
+
+    def delete_user(self):
+        """Delete the selected user from the database."""
+        if not hasattr(self, "selected_user") or not self.selected_user:
+            QMessageBox.warning(self, "No User Selected", "Please select a user first.")
+            return
+
+        confirmation = QMessageBox.question(
+            self, 
+            "Confirm Deletion", 
+            f"Are you sure you want to delete the user '{self.selected_user}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if confirmation == QMessageBox.Yes:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+
+                # Delete the user from the database
+                query = "DELETE FROM clients WHERE login_name = ? AND role = 'student'"
+                cursor.execute(query, (self.selected_user,))
+                conn.commit()
+                conn.close()
+
+                QMessageBox.information(self, "User Deleted", f"User '{self.selected_user}' has been deleted successfully.")
+                
+                # Refresh the user list
+                self.list_all_users()
+            except Exception as e:
+                QMessageBox.critical(self, "Database Error", f"An error occurred while deleting the user: {str(e)}")
+
+    def connected_students(self):
+        """Display the list of connected students and their IP addresses."""
+        try:
+            from server import client_to_login  # Import the client_to_login dictionary
+
+            if not client_to_login:
+                QMessageBox.information(self, "Connected Students", "No students are currently connected.")
+                return
+
+            # Format the connected students and their IP addresses
+            connected_students_info = [f"{login_name} ({ip[0]})" for ip, login_name in client_to_login.items()]
+
+            # Display the list of connected students in a dialog
+            selected_student, ok = QInputDialog.getItem(
+                self, 
+                "Select Student", 
+                "Choose a student to perform actions:", 
+                connected_students_info, 
+                0, 
+                False
+            )
+
+            if ok and selected_student:
+                # Extract the login_name and IP address from the selected student
+                login_name = selected_student.split(" (")[0]
+                ip_address = selected_student.split("(")[1].rstrip(")")
+
+                # Store the selected student's login_name and IP address
+                self.selected_student = login_name
+                self.selected_student_ip = ip_address
+
+                # Show actions for the selected student
+                self.show_student_actions()
+            else:
+                QMessageBox.warning(self, "No Selection", "No student was selected.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to fetch connected students: {e}")
+
+    
+    def show_students_selection_dialog(self, users):
+        """Show a dialog to select a student and take actions."""
+        user_names = [user[0] for user in users]
+
+        item, ok = QInputDialog.getItem(self, "Select User", "Choose a student:", user_names, 0, False)
+        if ok and item:
+            self.selected_student = item
+            self.show_user_actions()
+        else:
+            QMessageBox.warning(self, "No Selection", "No user was selected.")
+    
+    
+    
+    def show_student_actions(self):
+        """Show available actions for the selected student."""
+        self.action_window = QWidget()
+        self.action_window.setWindowTitle(f"Actions for {self.selected_student}")
+        self.action_window.setGeometry(100, 100, 400, 200)
+
+        layout = QVBoxLayout()
+
+        # Take Screenshot Button
         take_screenshot_button = QPushButton("Take Screenshot")
         take_screenshot_button.clicked.connect(self.take_screenshot)
         layout.addWidget(take_screenshot_button)
 
+        # Block Device Button
         block_device_button = QPushButton("Block Device (Keyboard/Mouse)")
         block_device_button.clicked.connect(self.block_device)
         layout.addWidget(block_device_button)
 
         self.action_window.setLayout(layout)
         self.action_window.show()
-
+    
+    
     def take_screenshot(self):
+        """Take a screenshot of the selected student's PC."""
         try:
             from server import screenshot
-            screenshot()
+            # Pass the selected student's IP address to the screenshot function
+            screenshot(self.selected_student_ip)
+            QMessageBox.information(self, "Screenshot", f"Taking a screenshot from {self.selected_student}'s PC.")
         except Exception as e:
-            print(f"Server Error: {e}")
-        QMessageBox.information(self, "Screenshot", f"Taking a screenshot from {self.selected_user}'s PC.")
-        # Actual screenshot logic would go here, potentially involving remote desktop or system interaction.
+            QMessageBox.critical(self, "Error", f"Failed to take screenshot: {e}")
 
     def block_device(self):
-        """Placeholder function to block a device on the user's PC."""
-        device, ok = QInputDialog.getItem(self, "Block Device", "Choose a device to block:", ["Keyboard", "Mouse"], 0, False)
+        """Block a device (keyboard/mouse) on the selected student's PC."""
+        device, ok = QInputDialog.getItem(
+            self, 
+            "Block Device", 
+            "Choose a device to block:", 
+            ["Keyboard", "Mouse"], 
+            0, 
+            False
+        )
         if ok and device:
-            QMessageBox.information(self, "Block Device", f"Blocking {device} on {self.selected_user}'s PC.")
-            # Actual logic to block the device would go here.
-
+            try:
+                # Send a command to the server to block the device for the selected student
+                self.block_device_on_student(self.selected_student_ip, device)
+                QMessageBox.information(self, "Block Device", f"Blocking {device} on {self.selected_student}'s PC.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to block device: {e}")
 
 
     def manage_student_folders(self):
@@ -360,15 +500,14 @@ class ServerAdminApp(QWidget):
         self.server_thread = threading.Thread(target=self.run_server)
         self.server_thread.daemon = True  # Make the thread a daemon thread
         self.server_thread.start()
-
+    
     def run_server(self):
         """Run the server logic."""
         try:
             from server import start_server
-            start_server()
+            start_server()  # Call start_server without passing any arguments
         except Exception as e:
             print(f"Server Error: {e}")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
