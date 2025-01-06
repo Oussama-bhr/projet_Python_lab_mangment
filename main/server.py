@@ -7,7 +7,6 @@ import sqlite3
 import bcrypt
 import random
 import string
-import os
 import cv2
 import numpy as np
 import struct
@@ -19,6 +18,7 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 cert_path = os.path.join(base_dir, 'certs', 'server.crt')
 key_path = os.path.join(base_dir, 'certs', 'server.key')
 
+client_sockets = {}  # Dictionary to store client sockets
 failed_attempts = {}
 STUDENT_DIR_ROOT = "students"
 
@@ -86,6 +86,9 @@ def handle_client(client_socket, client_address):
     """Handle individual client connection."""
     print(f"Connection from {client_address} established.")
     try:
+        # Store the client socket in the dictionary
+        client_sockets[client_address] = client_socket
+
         while True:
             # Receive data from the client
             data = client_socket.recv(1024)
@@ -129,8 +132,8 @@ def handle_client(client_socket, client_address):
 
                 # Display screenshot (optional)
                 cv2.imshow("Received Screenshot", image)
-                cv2.waitKey(0) 
-                cv2.destroyAllWindows() 
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
 
                 # Send confirmation to client
                 client_socket.send(b"Screenshot received successfully.")
@@ -167,6 +170,7 @@ def handle_client(client_socket, client_address):
         client_socket.close()
         print(f"Connection with {client_address} closed.")
 
+
 def receive_file(client_socket, file_name, file_size, client_ip):
     """Receive a file from the client and save it to the student's directory."""
     try:
@@ -200,7 +204,8 @@ def receive_file(client_socket, file_name, file_size, client_ip):
     except Exception as e:
         print(f"Error receiving file {file_name}: {e}")
         return f"Error receiving file: {e}"
-    
+
+
 def screenshot(client_socket):
     try:
         print("[DEBUG] Starting screenshot handling loop.")
@@ -257,6 +262,7 @@ def screenshot(client_socket):
     except Exception as e:
         print(f"[ERROR] Error in screenshot function: {e}")
 
+
 def receive_all(sock, count):
     """
     Receive exactly 'count' bytes from the socket.
@@ -272,6 +278,7 @@ def receive_all(sock, count):
         count -= len(newbuf)
         print(f"[DEBUG] Received {len(newbuf)} bytes, {count} bytes remaining.")
     return buf
+
 
 def start_server():
     """Start the SSL server."""

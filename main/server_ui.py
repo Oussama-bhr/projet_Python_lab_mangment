@@ -4,7 +4,7 @@ import bcrypt
 import platform
 import os
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout,QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QFileDialog, QInputDialog, QScrollArea,QTreeView, QFileSystemModel
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QFileDialog, QInputDialog, QScrollArea, QTreeView, QFileSystemModel
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -19,7 +19,6 @@ elif current_os == "Darwin":  # macOS
     os.environ["QT_QPA_PLATFORM"] = "cocoa"
 
 
-
 class ServerAdminApp(QWidget):
     admin_authenticated = pyqtSignal(bool)
 
@@ -28,8 +27,19 @@ class ServerAdminApp(QWidget):
         self.db_path = db_path
         self.server_thread = None  # Track the server thread
         self.personal_folder_path = "/home/mouhib/lab_managment/projet_Python_lab_mangment/students"
+        self.client_sockets = {}  # Dictionary to store client sockets
         self.init_ui()
-
+    def update_client_sockets(self, client_address, client_socket, login_name):
+        """Update the client_sockets dictionary with a new client connection."""
+        self.client_sockets[login_name] = client_socket
+        print(f"Client {login_name} added to client_sockets.")
+    def remove_client_socket(self, client_address):
+        """Remove a client socket from the client_sockets dictionary."""
+        for login_name, socket in self.client_sockets.items():
+            if socket.getpeername() == client_address:
+                del self.client_sockets[login_name]
+                print(f"Client {login_name} removed from client_sockets.")
+                break
     def init_ui(self):
         """Set up the UI for the admin login panel."""
         self.setWindowTitle("Admin Login")
@@ -105,6 +115,27 @@ class ServerAdminApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"An error occurred: {str(e)}")
             return False
+    def get_login_name_for_client(self, client_address):
+        """Retrieve the login name associated with a client address."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Query the database to find the login name for the client's IP address
+            query = """
+            SELECT login_name FROM clients WHERE ip_address = ?
+            """
+            cursor.execute(query, (client_address[0],))  # client_address[0] is the IP address
+            result = cursor.fetchone()
+
+            conn.close()
+
+            if result:
+                return result[0]  # Return the login name
+            return None
+        except Exception as e:
+            print(f"Database Error: {e}")
+            return None
 
     def show_admin_panel(self):
         """Open the admin control panel with the 'Manage Student Folders' button."""
@@ -115,7 +146,7 @@ class ServerAdminApp(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(20)
 
-        # New button to start the server 
+        # New button to start the server
         start_server_button = QPushButton("Start Server")
         start_server_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
         start_server_button.clicked.connect(self.start_server)  # Connect to the start_server function
@@ -132,9 +163,6 @@ class ServerAdminApp(QWidget):
         list_users_button.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;")
         list_users_button.clicked.connect(self.list_all_users)
         layout.addWidget(list_users_button)
-
-        
-       
 
         self.admin_panel.setLayout(layout)
         self.admin_panel.show()
@@ -178,7 +206,7 @@ class ServerAdminApp(QWidget):
         self.action_window.setGeometry(100, 100, 400, 200)
 
         layout = QVBoxLayout()
-        
+
         take_screenshot_button = QPushButton("Take Screenshot")
         take_screenshot_button.clicked.connect(self.take_screenshot)
         layout.addWidget(take_screenshot_button)
@@ -191,14 +219,23 @@ class ServerAdminApp(QWidget):
         self.action_window.show()
 
     def take_screenshot(self):
+        """Take a screenshot of the selected client's screen."""
         try:
+            # Get the client socket for the selected user
+            selected_user = self.selected_user
+            client_socket = self.client_sockets.get(selected_user)
+
+            if client_socket is None:
+                QMessageBox.warning(self, "Error", f"No active connection for {selected_user}.")
+                return
+
+            # Call the take_screenshot function with the client_socket
             from server import screenshot
-            screenshot()
+            screenshot(client_socket)
         except Exception as e:
             print(f"Server Error: {e}")
         QMessageBox.information(self, "Screenshot", f"Taking a screenshot from {self.selected_user}'s PC.")
-        # Actual screenshot logic would go here, potentially involving remote desktop or system interaction.
-
+        
     def block_device(self):
         """Placeholder function to block a device on the user's PC."""
         device, ok = QInputDialog.getItem(self, "Block Device", "Choose a device to block:", ["Keyboard", "Mouse"], 0, False)
@@ -206,12 +243,10 @@ class ServerAdminApp(QWidget):
             QMessageBox.information(self, "Block Device", f"Blocking {device} on {self.selected_user}'s PC.")
             # Actual logic to block the device would go here.
 
-
-
     def manage_student_folders(self):
         """Load the existing student folders and provide options to create, delete, or view contents."""
         base_path = "/home/mouhib/lab_managment/projet_Python_lab_mangment/students"
-        
+
         # Open a scrollable area to display the folders
         self.folder_management_window = QWidget()
         self.folder_management_window.setWindowTitle("Manage Student Folders")
@@ -281,12 +316,11 @@ class ServerAdminApp(QWidget):
             else:
                 QMessageBox.warning(self, "Error", "Folder already exists.")
 
-    
     def delete_student_folder(self):
         """Delete the selected student folder."""
         index = self.file_tree.currentIndex()
         student_folder_path = self.file_model.filePath(index)
-        
+
         if os.path.isdir(student_folder_path):
             confirm = QMessageBox.question(
                 self,
@@ -306,16 +340,16 @@ class ServerAdminApp(QWidget):
         else:
             QMessageBox.warning(self, "Error", "No folder selected or folder is not empty.")
 
-   # Open a file or navigate to a folder
     def open_file_or_folder(self, index):
+        """Open a file or navigate to a folder."""
         file_path = self.file_model.filePath(index)
         if os.path.isdir(file_path):
             self.file_tree.setRootIndex(self.file_model.index(file_path))
         else:
             QMessageBox.information(self, "File Opened", f"Opening file: {file_path}")
 
-# Upload file or folder
     def upload_file_or_folder(self):
+        """Upload a file or folder to the server."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Upload")
         if file_path:
             try:
@@ -325,8 +359,8 @@ class ServerAdminApp(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to upload file: {e}")
 
-    # Download selected file or folder
     def download_selected(self):
+        """Download the selected file or folder."""
         index = self.file_tree.currentIndex()
         file_path = self.file_model.filePath(index)
 
@@ -342,11 +376,10 @@ class ServerAdminApp(QWidget):
         else:
             QMessageBox.warning(self, "Error", "No file or folder selected.")
 
-    # Refresh the file explorer view
     def refresh_view(self):
+        """Refresh the file explorer view."""
         self.file_tree.setRootIndex(self.file_model.index(self.personal_folder_path))
         QMessageBox.information(self, "Refreshed", "File explorer refreshed.")
-
 
     def start_server(self):
         """Trigger the server start logic in a new thread."""
