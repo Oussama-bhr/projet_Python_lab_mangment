@@ -7,7 +7,6 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 import ssl
 from student import StudentPage
-import threading
 import os
 import platform
 
@@ -18,6 +17,7 @@ elif current_os == "Windows":
     os.environ["QT_QPA_PLATFORM"] = "windows"
 elif current_os == "Darwin":  # macOS
     os.environ["QT_QPA_PLATFORM"] = "cocoa"
+
 # Backend Configuration
 HOST = '127.0.0.1'
 PORT = 12345
@@ -31,11 +31,9 @@ def connect_to_server():
     """
     Function to create a persistent connection to the server.
     """
-    global client_socket
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket = context.wrap_socket(client_socket, server_hostname="localhost")
-    
     try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket = context.wrap_socket(client_socket, server_hostname="localhost")
         client_socket.connect((HOST, PORT))
         return client_socket
     except Exception as e:
@@ -43,14 +41,12 @@ def connect_to_server():
         return None
 
 
-
-    
 # Login Page Class
 class LoginPage(QWidget):
-    def __init__(self, switch_page_callback):
+    def __init__(self, switch_page_callback, client_socket):
         super().__init__()
         self.switch_page_callback = switch_page_callback
-        self.client_socket = None  # Store the socket connection
+        self.client_socket = client_socket  # Use the shared socket
         self.init_ui()
 
     def init_ui(self):
@@ -104,12 +100,9 @@ class LoginPage(QWidget):
             QMessageBox.warning(self, "Error", "Please fill in all fields.")
             return
 
-        if self.client_socket is None:
-            self.client_socket = connect_to_server()  # Establish a persistent connection
-
         if self.client_socket:
             data = f"authenticate,{login_name},{password}"
-            print(f"Sending data to server: {data}") 
+            print(f"Sending data to server: {data}")
             self.send_data_to_server(data)  # Send authentication data
         else:
             QMessageBox.warning(self, "Error", "Unable to establish connection.")
@@ -125,7 +118,6 @@ class LoginPage(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Error communicating with server: {e}")
 
-
     def handle_server_response(self, response):
         """
         Handle the server response after authentication or other operations.
@@ -134,15 +126,15 @@ class LoginPage(QWidget):
             login_name = self.login_name_input.text()  # Get the login name
             self.switch_page_callback("student", login_name)  # Switch to the student page with login_name
         else:
-            QMessageBox.warning(self, "Error", response)  
-
+            QMessageBox.warning(self, "Error", response)
 
 
 # Signup Page Class
 class SignupPage(QWidget):
-    def __init__(self, switch_page_callback):
+    def __init__(self, switch_page_callback, client_socket):
         super().__init__()
         self.switch_page_callback = switch_page_callback
+        self.client_socket = client_socket  # Use the shared socket
         self.init_ui()
 
     def init_ui(self):
@@ -196,17 +188,13 @@ class SignupPage(QWidget):
             return
 
         data = f"register,{student_name},{student_id}"
-        client_socket = connect_to_server()  # Establish the connection here
-
-        if client_socket:
+        if self.client_socket:
             try:
-                client_socket.send(data.encode())  # Send data to the server
-                response = client_socket.recv(1024).decode()  # Receive the server response
+                self.client_socket.send(data.encode())  # Send data to the server
+                response = self.client_socket.recv(1024).decode()  # Receive the server response
                 self.handle_server_response(response)  # Handle the server response
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Error communicating with server: {e}")
-            finally:
-                client_socket.close()  # Close the connection after communication
         else:
             QMessageBox.warning(self, "Error", "Unable to establish connection.")
 
@@ -230,16 +218,12 @@ class SignupPage(QWidget):
             QMessageBox.warning(self, "Error", response)
 
 
-
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.client_socket = connect_to_server()  # Keep the socket in the main window
-        self.student_page = None  # Initialize student_page as None
+        self.client_socket = connect_to_server()  # Establish a single connection
+        self.student_page = None
         self.init_ui()
-
-        # Start a thread to listen for server commands
-        
 
     def init_ui(self):
         self.setWindowTitle("Login and Signup Application")
@@ -248,11 +232,11 @@ class MainWindow(QWidget):
         # Stack to hold multiple pages
         self.pages = QStackedWidget()
 
-        # Create pages
-        self.login_page = LoginPage(self.switch_page)
-        self.signup_page = SignupPage(self.switch_page)
+        # Create pages and pass the client_socket
+        self.login_page = LoginPage(self.switch_page, self.client_socket)
+        self.signup_page = SignupPage(self.switch_page, self.client_socket)
 
-        # Add pages to stack (no admin page)
+        # Add pages to stack
         self.pages.addWidget(self.login_page)
         self.pages.addWidget(self.signup_page)
 
@@ -269,13 +253,9 @@ class MainWindow(QWidget):
             self.pages.setCurrentWidget(self.signup_page)
         elif page_name == "student":
             if not self.student_page:
-                if not self.student_page:
-                    self.student_page = StudentPage(self.client_socket, login_name)  # Pass login_name
+                self.student_page = StudentPage(self.client_socket, login_name)  # Pass the existing socket
                 self.pages.addWidget(self.student_page)
-
             self.pages.setCurrentWidget(self.student_page)
-
-    
 
 
 if __name__ == "__main__":
