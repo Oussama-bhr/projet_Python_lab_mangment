@@ -19,7 +19,7 @@ elif current_os == "Windows":
 elif current_os == "Darwin":  # macOS
     os.environ["QT_QPA_PLATFORM"] = "cocoa"
 # Backend Configuration
-HOST = '192.168.111.1'
+HOST = '127.0.0.1'
 PORT = 12345
 
 context = ssl.create_default_context()
@@ -37,7 +37,6 @@ def connect_to_server():
     
     try:
         client_socket.connect((HOST, PORT))
-        student_page = StudentPage(client_socket)
         return client_socket
     except Exception as e:
         print(f"Error: {e}")
@@ -132,10 +131,10 @@ class LoginPage(QWidget):
         Handle the server response after authentication or other operations.
         """
         if "Authentication successful" in response:
-            # After successful login, create a new socket for file transfers
-            self.switch_page_callback("student")  # Switch to the student page
+            login_name = self.login_name_input.text()  # Get the login name
+            self.switch_page_callback("student", login_name)  # Switch to the student page with login_name
         else:
-            QMessageBox.warning(self, "Error", response)  # Show the error message from the server
+            QMessageBox.warning(self, "Error", response)  
 
 
 
@@ -236,12 +235,11 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.client_socket = connect_to_server()  # Keep the socket in the main window
+        self.student_page = None  # Initialize student_page as None
         self.init_ui()
 
         # Start a thread to listen for server commands
-        if self.client_socket:
-            self.listener_thread = threading.Thread(target=self.listen_for_commands, daemon=True)
-            self.listener_thread.start()
+        
 
     def init_ui(self):
         self.setWindowTitle("Login and Signup Application")
@@ -253,47 +251,31 @@ class MainWindow(QWidget):
         # Create pages
         self.login_page = LoginPage(self.switch_page)
         self.signup_page = SignupPage(self.switch_page)
-        self.student_page = StudentPage(self.client_socket)
 
         # Add pages to stack (no admin page)
         self.pages.addWidget(self.login_page)
         self.pages.addWidget(self.signup_page)
-        self.pages.addWidget(self.student_page)
 
         # Layout for the main window
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.pages)
         self.setLayout(main_layout)
 
-    def switch_page(self, page_name):
+    def switch_page(self, page_name, login_name=None):
         """Switch between pages based on page name."""
         if page_name == "login":
             self.pages.setCurrentWidget(self.login_page)
         elif page_name == "signup":
             self.pages.setCurrentWidget(self.signup_page)
         elif page_name == "student":
+            if not self.student_page:
+                if not self.student_page:
+                    self.student_page = StudentPage(self.client_socket, login_name)  # Pass login_name
+                self.pages.addWidget(self.student_page)
+
             self.pages.setCurrentWidget(self.student_page)
 
-    def listen_for_commands(self):
-        """
-        Continuously listen for commands from the server and handle them.
-        """
-        try:
-            while True:
-                if self.client_socket:
-                    command = self.client_socket.recv(1024).decode()
-                    print(f"Command received: {command}")
-
-                    if command == "screenshot":
-                        # Trigger the screenshot function
-                        self.student_page.take_screenshot(self.client_socket)
-                    elif command == "":
-                        # Handle empty command (server might send an empty message)
-                        continue
-                    else:
-                        print(f"Unknown command: {command}")
-        except Exception as e:
-            print(f"Error in listener thread: {e}")
+    
 
 
 if __name__ == "__main__":

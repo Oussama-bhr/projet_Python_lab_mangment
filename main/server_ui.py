@@ -10,6 +10,9 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, pyqtSignal
 import threading
 
+
+# Rest of your server_ui code...
+
 current_os = platform.system()
 if current_os == "Linux":
     os.environ["QT_QPA_PLATFORM"] = "xcb"
@@ -167,6 +170,27 @@ class ServerAdminApp(QWidget):
         self.admin_panel.setLayout(layout)
         self.admin_panel.show()
 
+    def connected_students(self):
+        """Display the list of connected students and their IP addresses."""
+        try:
+            from server import client_to_login  # Import the client_to_login dictionary
+
+            if not client_to_login:
+                QMessageBox.information(self, "Connected Students", "No students are currently connected.")
+                return
+
+            # Format the connected students and their IP addresses
+            connected_students_info = "\n".join(
+                [f"Student: {login_name}, IP: {ip[0]}" for ip, login_name in client_to_login.items()]
+            )
+
+            # Display the information in a QMessageBox
+            QMessageBox.information(self, "Connected Students", f"Connected Students:\n{connected_students_info}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to fetch connected students: {e}")
+
+    
+    
     def list_all_users(self):
         """List all users from the database."""
         try:
@@ -206,18 +230,19 @@ class ServerAdminApp(QWidget):
         self.action_window.setGeometry(100, 100, 400, 200)
 
         layout = QVBoxLayout()
-
         take_screenshot_button = QPushButton("Take Screenshot")
         take_screenshot_button.clicked.connect(self.take_screenshot)
         layout.addWidget(take_screenshot_button)
 
+        # Block Device Button
         block_device_button = QPushButton("Block Device (Keyboard/Mouse)")
         block_device_button.clicked.connect(self.block_device)
         layout.addWidget(block_device_button)
 
         self.action_window.setLayout(layout)
         self.action_window.show()
-
+    
+    
     def take_screenshot(self):
         """Take a screenshot of the selected client's screen."""
         try:
@@ -237,8 +262,15 @@ class ServerAdminApp(QWidget):
         QMessageBox.information(self, "Screenshot", f"Taking a screenshot from {self.selected_user}'s PC.")
         
     def block_device(self):
-        """Placeholder function to block a device on the user's PC."""
-        device, ok = QInputDialog.getItem(self, "Block Device", "Choose a device to block:", ["Keyboard", "Mouse"], 0, False)
+        """Block a device (keyboard/mouse) on the selected student's PC."""
+        device, ok = QInputDialog.getItem(
+            self, 
+            "Block Device", 
+            "Choose a device to block:", 
+            ["Keyboard", "Mouse"], 
+            0, 
+            False
+        )
         if ok and device:
             QMessageBox.information(self, "Block Device", f"Blocking {device} on {self.selected_user}'s PC.")
             # Actual logic to block the device would go here.
@@ -393,15 +425,14 @@ class ServerAdminApp(QWidget):
         self.server_thread = threading.Thread(target=self.run_server)
         self.server_thread.daemon = True  # Make the thread a daemon thread
         self.server_thread.start()
-
+    
     def run_server(self):
         """Run the server logic."""
         try:
             from server import start_server
-            start_server()
+            start_server()  # Call start_server without passing any arguments
         except Exception as e:
             print(f"Server Error: {e}")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

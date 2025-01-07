@@ -7,10 +7,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 import socket
-import cv2
 import pyautogui
 import numpy as np
 import struct
+from datetime import datetime
 
 class CheckableFileSystemModel(QFileSystemModel):
     """
@@ -42,22 +42,43 @@ class CheckableFileSystemModel(QFileSystemModel):
 
 
 class StudentPage(QWidget):
-    def __init__(self, client_socket):
+    def __init__(self, client_socket, login_name):  # Add login_name as a parameter
         super().__init__()
         self.client_socket = client_socket
+        self.login_name = login_name  # Store login_name
         self.personal_folder_path = os.path.join(os.path.expanduser("~"), "MyPersonalSpace")
         self.create_personal_folder()
         self.init_ui()
 
-    # Capture and send one screenshot
-    def take_screenshot(client_socket):
+
+    
+    def take_screenshot(self):
+        """Capture a screenshot and send it to the server."""
         try:
+            # Take a screenshot using pyautogui
             screen = pyautogui.screenshot()
-            frame = np.array(screen)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            message = struct.pack(">L", len(buffer)) + buffer.tobytes()
-            client_socket.sendall(message)
+
+            # Create a filename based on the login_name and current date/time
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"{self.login_name}_{timestamp}.png"
+            filepath = os.path.join(os.getcwd(), filename)  # Save in the current working directory
+
+            # Save the screenshot to a file
+            screen.save(filepath)
+
+            # Read the file contents to send to the server
+            with open(filepath, "rb") as f:
+                file_data = f.read()
+
+            # Send the size of the file first, followed by the file data
+            message = struct.pack(">L", len(file_data)) + file_data
+            self.client_socket.sendall(message)
+
+            print(f"Screenshot saved as {filename} and sent to the server.")
+
+            # Optionally, clean up the file after sending
+            os.remove(filepath)
+
         except Exception as e:
             print("An error occurred:", e)
 
@@ -79,10 +100,15 @@ class StudentPage(QWidget):
         main_layout = QVBoxLayout()
 
         # Title
-        title = QLabel("HomeClient: Personal Space")
+        title = QLabel(f"Welcome, {self.login_name}!: Personal Space")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px 0;")
         main_layout.addWidget(title)
+
+        def set_user(self, login_name):
+            """Update the login name and refresh the UI if needed."""
+            self.login_name = login_name
+            self.setWindowTitle(f"Welcome, {self.login_name}") 
 
         # File Explorer with Checkboxes
         self.file_tree = QTreeView()
@@ -236,21 +262,6 @@ class StudentPage(QWidget):
                     QMessageBox.warning(self, "Error", "Socket connection not established.")
             else:
                 QMessageBox.warning(self, "Error", "No items selected.")
-
-    def handle_server_response(self, response):
-        """
-        This method handles the response from the server after a file is sent.
-        It can process success or error messages or any other data the server sends back.
-        """
-        print(f"Server response: {response}")
-
-        if "Error" in response:
-            # If the server response contains an error message, show it to the user
-            QMessageBox.warning(self, "Error", f"Error: {response}")
-        else:
-            # If it's a success message or other information, display it
-            QMessageBox.information(self, "Success", f"Server response: {response}")
-
 
 
     def refresh_view(self):
