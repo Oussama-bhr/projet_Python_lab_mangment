@@ -209,59 +209,63 @@ class StudentPage(QWidget):
 
 
     def send_selected(self):
+        if not hasattr(self, 'client_socket') or not self.client_socket:
+            QMessageBox.warning(self, "Error", "Not connected to the server.")
+            return
+
         checked_items = self.get_checked_items()
         if checked_items:
-            if hasattr(self, 'client_socket') and self.client_socket:
-                try:
-                    for item_path in checked_items:
-                        if os.path.isfile(item_path):
-                            file_name = item_path  # Use the full path of the file
-                            # Send the command to the server (send file command)
-                            command = "send_file"
-                            message = f"{command},{file_name}"
-                            self.client_socket.send(message.encode())  # Send file name as a string
-                            print(f"Debug: Sent command to server: {message}")
+            try:
+                for item_path in checked_items:
+                    if os.path.isfile(item_path):
+                        file_name = item_path  # Use the full path of the file
+                        # Send the command to the server (send file command)
+                        command = "send_file"
+                        message = f"{command},{file_name}"
+                        self.client_socket.send(message.encode())  # Send file name as a string
+                        print(f"Debug: Sent command to server: {message}")
 
-                            # Send the file content as binary
-                            with open(item_path, 'rb') as file:
-                                total_sent = 0
-                                file_size = os.path.getsize(item_path) 
-                                # Send file size as a separate message
-                                self.client_socket.send(str(file_size).encode()) 
-                                while chunk := file.read(1096):
-                                    self.client_socket.send(chunk)  # Send binary file data
-                                    total_sent += len(chunk)
-                                    
+                        # Send the file content as binary
+                        with open(item_path, 'rb') as file:
+                            total_sent = 0
+                            file_size = os.path.getsize(item_path)
+                            # Send file size as a separate message
+                            self.client_socket.send(str(file_size).encode())
+                            print(f"Debug: Sent file size: {file_size}")
 
-                            print(f"Debug: File {file_name} sent successfully.")
+                            while chunk := file.read(1024):  # Smaller chunk size
+                                self.client_socket.send(chunk)  # Send binary file data
+                                total_sent += len(chunk)
+                                print(f"Debug: Sent {total_sent}/{file_size} bytes.")
 
-                            # Optionally, wait for the server to acknowledge the file
-                            response = self.client_socket.recv(1024)  # Read server response as raw bytes
-                            print(f"Debug: Server response received.")
+                        print(f"Debug: File {file_name} sent successfully.")
 
-                            # Process server response, ensure it's a text message
-                            try:
-                                decoded_response = response.decode('utf-8')
-                                print(f"Decoded response: {decoded_response}")
-                                self.handle_server_response(decoded_response)  # Process response as needed
-                            except UnicodeDecodeError:
-                                print("Received non-textual data from server.")
+                        # Optionally, wait for the server to acknowledge the file
+                        response = self.client_socket.recv(1024)  # Read server response as raw bytes
+                        print(f"Debug: Server response received.")
 
-                        # Provide a success message
-                        QMessageBox.information(self, "Success", "Files sent successfully.")
-                except socket.error as e:
-                        print(f"Socket error: {e}")
-                        QMessageBox.warning(self, "Socket Error", f"Error sending files: {e}")
-                except OSError as e:
-                        print(f"OS error: {e}")
-                        QMessageBox.warning(self, "File Error", f"Error sending files: {e}")
-                except Exception as e:
-                        print(f"Error sending files: {e}")
-                        QMessageBox.warning(self, "Error", f"Error sending files: {e}")
-                else:
-                    QMessageBox.warning(self, "Error", "Socket connection not established.")
-            else:
-                QMessageBox.warning(self, "Error", "No items selected.")
+                        # Process server response, ensure it's a text message
+                        try:
+                            decoded_response = response.decode('utf-8')
+                            print(f"Decoded response: {decoded_response}")
+                            self.handle_server_response(decoded_response)  # Process response as needed
+                        except UnicodeDecodeError:
+                            print("Received non-textual data from server.")
+
+                    # Provide a success message
+                    QMessageBox.information(self, "Success", "Files sent successfully.")
+            
+            except OSError as e:
+                print(f"OS error: {e}")
+                QMessageBox.warning(self, "File Error", f"Error sending files: {e}")
+            except Exception as e:
+                print(f"Error sending files: {e}")
+                QMessageBox.warning(self, "Error", f"Error sending files: {e}")
+        else:
+            QMessageBox.warning(self, "Error", "No items selected.")
+    def handle_server_response(self, response):
+        # Handle the response from the server here
+        print(f"Server response: {response}")
 
 
     def refresh_view(self):
