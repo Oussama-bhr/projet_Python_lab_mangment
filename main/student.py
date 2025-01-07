@@ -254,9 +254,7 @@ class StudentPage(QWidget):
 
                     # Provide a success message
                     QMessageBox.information(self, "Success", "Files sent successfully.")
-            except socket.error as e:
-                print(f"Socket error: {e}")
-                QMessageBox.warning(self, "Socket Error", f"Error sending files: {e}")
+            
             except OSError as e:
                 print(f"OS error: {e}")
                 QMessageBox.warning(self, "File Error", f"Error sending files: {e}")
